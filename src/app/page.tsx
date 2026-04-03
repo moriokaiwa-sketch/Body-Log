@@ -1,35 +1,14 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { getEntries, addEntry, deleteEntry, BodyLogEntry } from "@/lib/storage";
+import { getEntriesAction } from "@/app/actions";
 import { InputForm } from "@/components/InputForm";
 import { SummaryCards } from "@/components/SummaryCards";
 import { TrendChart } from "@/components/TrendChart";
 import { HistoryList } from "@/components/HistoryList";
 import { Activity } from "lucide-react";
 
-export default function Home() {
-  const [entries, setEntries] = useState<BodyLogEntry[]>([]);
-  const [isMounted, setIsMounted] = useState(false);
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    setEntries(getEntries());
-    setIsMounted(true);
-  }, []);
-
-  const handleSave = (newEntry: Omit<BodyLogEntry, 'id'>) => {
-    const updated = addEntry(newEntry);
-    setEntries(updated);
-  };
-
-  const handleDelete = (id: string) => {
-    const updated = deleteEntry(id);
-    setEntries(updated);
-  };
-
-  if (!isMounted) {
-    return <div className="min-h-screen bg-slate-50" />; // Prevents hydration mismatch
-  }
+export default async function Home() {
+  const entries = await getEntriesAction();
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 selection:bg-indigo-100">
@@ -51,7 +30,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 xl:col-span-4">
-            <InputForm onSave={handleSave} />
+            <InputForm />
           </div>
           <div className="lg:col-span-7 xl:col-span-8">
             <TrendChart entries={entries} />
@@ -59,7 +38,7 @@ export default function Home() {
         </div>
 
         <section>
-          <HistoryList entries={entries} onDelete={handleDelete} />
+          <HistoryList entries={entries} />
         </section>
       </main>
     </div>

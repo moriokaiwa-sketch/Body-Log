@@ -1,16 +1,31 @@
 "use client";
 
-import { BodyLogEntry } from "@/lib/storage";
+import { useTransition } from "react";
+import { BodyLogEntry } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
+import { deleteEntryAction } from "@/app/actions";
 
 interface HistoryListProps {
   entries: BodyLogEntry[];
-  onDelete: (id: string) => void;
 }
 
-export function HistoryList({ entries, onDelete }: HistoryListProps) {
+export function HistoryList({ entries }: HistoryListProps) {
+  const [isPending, startTransition] = useTransition();
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("この記録を削除してもよろしいですか？")) {
+      startTransition(async () => {
+        try {
+          await deleteEntryAction(id);
+        } catch (error) {
+          alert("データの削除に失敗しました。");
+        }
+      });
+    }
+  };
+
   return (
     <Card className="w-full shadow-sm mt-8 mb-8">
       <CardHeader>
@@ -45,14 +60,11 @@ export function HistoryList({ entries, onDelete }: HistoryListProps) {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="text-rose-400 hover:text-rose-600 hover:bg-rose-50 self-end sm:self-auto flex-shrink-0"
-                  onClick={() => {
-                    if (window.confirm("この記録を削除してもよろしいですか？")) {
-                      onDelete(entry.id);
-                    }
-                  }}
+                  className="text-rose-400 hover:text-rose-600 hover:bg-rose-50 self-end sm:self-auto flex-shrink-0 disabled:opacity-50"
+                  disabled={isPending}
+                  onClick={() => handleDelete(entry.id)}
                 >
-                  <Trash2 className="w-5 h-5" />
+                  {isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
                 </Button>
               </div>
             ))}

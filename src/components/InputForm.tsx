@@ -1,23 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BodyLogEntry } from "@/lib/storage";
+import { addEntryAction } from "@/app/actions";
+import { Loader2 } from "lucide-react";
 
-interface InputFormProps {
-  onSave: (entry: Omit<BodyLogEntry, 'id'>) => void;
-}
-
-export function InputForm({ onSave }: InputFormProps) {
+export function InputForm() {
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [weight, setWeight] = useState("");
   const [bodyFat, setBodyFat] = useState("");
   const [muscleMass, setMuscleMass] = useState("");
   const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,17 +35,23 @@ export function InputForm({ onSave }: InputFormProps) {
       return;
     }
 
-    onSave({
-      date,
-      weight: w,
-      bodyFat: bf,
-      muscleMass: mm,
+    startTransition(async () => {
+      try {
+        await addEntryAction({
+          date,
+          weight: w,
+          bodyFat: bf,
+          muscleMass: mm,
+        });
+
+        // Clear fields except date
+        setWeight("");
+        setBodyFat("");
+        setMuscleMass("");
+      } catch (err) {
+        setError("データの保存に失敗しました。");
+      }
     });
-    
-    // 記録後、入力欄をクリア
-    setWeight("");
-    setBodyFat("");
-    setMuscleMass("");
   };
 
   return (
@@ -66,6 +70,7 @@ export function InputForm({ onSave }: InputFormProps) {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
+              disabled={isPending}
               className="w-full text-lg h-12"
             />
           </div>
@@ -81,6 +86,7 @@ export function InputForm({ onSave }: InputFormProps) {
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 required
+                disabled={isPending}
                 className="text-lg h-12"
               />
             </div>
@@ -95,6 +101,7 @@ export function InputForm({ onSave }: InputFormProps) {
                 value={bodyFat}
                 onChange={(e) => setBodyFat(e.target.value)}
                 required
+                disabled={isPending}
                 className="text-lg h-12"
               />
             </div>
@@ -109,13 +116,26 @@ export function InputForm({ onSave }: InputFormProps) {
                 value={muscleMass}
                 onChange={(e) => setMuscleMass(e.target.value)}
                 required
+                disabled={isPending}
                 className="text-lg h-12"
               />
             </div>
           </div>
           {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
-          <Button type="submit" size="lg" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-lg h-14 mt-4 transition-all active:scale-95">
-            記録する
+          <Button 
+            type="submit" 
+            size="lg" 
+            disabled={isPending}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-lg h-14 mt-4 transition-all active:scale-95 disabled:opacity-70"
+          >
+            {isPending ? (
+              <span className="flex items-center">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                通信中...
+              </span>
+            ) : (
+              "記録する"
+            )}
           </Button>
         </form>
       </CardContent>

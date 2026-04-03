@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { BodyLogEntry } from "@/lib/storage";
+import { BodyLogEntry } from "@/app/actions";
 import { Activity, Scale, Percent, ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 
 interface SummaryCardsProps {
