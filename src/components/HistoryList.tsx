@@ -1,10 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { BodyLogEntry } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { deleteEntryAction } from "@/app/actions";
 
 interface HistoryListProps {
@@ -13,6 +13,7 @@ interface HistoryListProps {
 
 export function HistoryList({ entries }: HistoryListProps) {
   const [isPending, startTransition] = useTransition();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const handleDelete = (id: string) => {
     if (window.confirm("この記録を削除してもよろしいですか？")) {
@@ -26,6 +27,9 @@ export function HistoryList({ entries }: HistoryListProps) {
     }
   };
 
+  const visibleEntries = isExpanded ? entries : entries.slice(0, 1);
+  const hasMoreEntries = entries.length > 1;
+
   return (
     <Card className="w-full shadow-sm mt-8 mb-8">
       <CardHeader>
@@ -35,8 +39,9 @@ export function HistoryList({ entries }: HistoryListProps) {
         {entries.length === 0 ? (
           <div className="text-center text-slate-400 py-8">記録がありません</div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {entries.map((entry) => (
+          <div className="flex flex-col">
+            <div className="divide-y divide-slate-100">
+              {visibleEntries.map((entry) => (
               <div key={entry.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-6 w-full sm:w-auto">
                   <div className="bg-slate-50 px-3 py-2 rounded-lg text-slate-600 font-medium text-sm whitespace-nowrap">
@@ -68,6 +73,26 @@ export function HistoryList({ entries }: HistoryListProps) {
                 </Button>
               </div>
             ))}
+            </div>
+            {hasMoreEntries && (
+              <Button
+                variant="ghost"
+                className="w-full mt-2 text-slate-500 hover:text-slate-700"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="w-4 h-4 mr-2" />
+                    閉じる
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                    すべての履歴を見る ({entries.length - 1}件)
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
       </CardContent>
