@@ -76,7 +76,10 @@ export function InputForm() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="weight">体重 (kg)</Label>
+              <Label htmlFor="weight" className="text-indigo-600 font-bold flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+                体重 (kg)
+              </Label>
               <Input
                 id="weight"
                 type="number"
@@ -87,11 +90,14 @@ export function InputForm() {
                 onChange={(e) => setWeight(e.target.value)}
                 required
                 disabled={isPending}
-                className="text-lg h-12"
+                className="text-lg h-12 border-indigo-200 focus-visible:ring-indigo-500"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bodyFat">体脂肪率 (%)</Label>
+              <Label htmlFor="bodyFat" className="text-sky-600 font-bold flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-sky-500"></div>
+                体脂肪率 (%)
+              </Label>
               <Input
                 id="bodyFat"
                 type="number"
@@ -102,11 +108,14 @@ export function InputForm() {
                 onChange={(e) => setBodyFat(e.target.value)}
                 required
                 disabled={isPending}
-                className="text-lg h-12"
+                className="text-lg h-12 border-sky-200 focus-visible:ring-sky-500"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="muscleMass">骨格筋率 (%)</Label>
+              <Label htmlFor="muscleMass" className="text-emerald-600 font-bold flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                骨格筋率 (%)
+              </Label>
               <Input
                 id="muscleMass"
                 type="number"
@@ -117,7 +126,7 @@ export function InputForm() {
                 onChange={(e) => setMuscleMass(e.target.value)}
                 required
                 disabled={isPending}
-                className="text-lg h-12"
+                className="text-lg h-12 border-emerald-200 focus-visible:ring-emerald-500"
               />
             </div>
           </div>

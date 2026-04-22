@@ -99,7 +99,7 @@ export function TrendChart({ entries }: TrendChartProps) {
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
                   labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}
                 />
-                <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+                <Legend layout="vertical" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
                 <Line 
                   yAxisId="left"
                   type="monotone" 
