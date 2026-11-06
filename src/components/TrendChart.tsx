@@ -5,13 +5,15 @@ import { BodyLogEntry } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
-import { subDays, isAfter, startOfDay, eachDayOfInterval, format } from "date-fns";
+import { subDays, isAfter, startOfDay, eachDayOfInterval, format, startOfWeek, addDays } from "date-fns";
 
 interface TrendChartProps {
   entries: BodyLogEntry[];
 }
 
 type Period = "7" | "30" | "all";
+type Metric = "all" | "weight" | "bodyFat" | "muscleMass";
+type Aggregation = "daily" | "weekly";
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -27,7 +29,8 @@ interface CustomTooltipProps {
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !label) return null;
 
-  const formattedDate = typeof label === "string" ? label.replace(/-/g, "/") : label;
+  const isWeeklyLabel = label.endsWith("週");
+  const formattedDate = isWeeklyLabel ? `${label} (平均)` : label.replace(/-/g, "/");
   const hasData = payload && payload.some((p) => p.value != null);
 
   return (
@@ -63,6 +66,17 @@ function parseLocalDate(dateStr: string): Date {
 
 export function TrendChart({ entries }: TrendChartProps) {
   const [period, setPeriod] = useState<Period>("30");
+  const [metric, setMetric] = useState<Metric>("all");
+  const [aggregation, setAggregation] = useState<Aggregation>("daily");
+
+  const handlePeriodChange = (newPeriod: Period) => {
+    setPeriod(newPeriod);
+    if (newPeriod === "all") {
+      setAggregation("weekly");
+    } else if (newPeriod === "7") {
+      setAggregation("daily");
+    }
+  };
 
   const chartData = useMemo(() => {
     if (entries.length === 0) return [];
@@ -94,6 +108,70 @@ export function TrendChart({ entries }: TrendChartProps) {
       endDate = newestDate;
     }
 
+    // 週平均モード（7日間の場合は日別強制）
+    if (aggregation === "weekly" && period !== "7") {
+      const weekMap = new Map<string, {
+        weekStart: Date;
+        weights: number[];
+        bodyFats: number[];
+        muscleMasses: number[];
+      }>();
+
+      const currentWeekStart = startOfWeek(startDate, { weekStartsOn: 1 });
+      const finalWeekStart = startOfWeek(endDate, { weekStartsOn: 1 });
+
+      let cur = currentWeekStart;
+      while (!isAfter(cur, finalWeekStart)) {
+        const key = format(cur, "yyyy-MM-dd");
+        weekMap.set(key, {
+          weekStart: cur,
+          weights: [],
+          bodyFats: [],
+          muscleMasses: [],
+        });
+        cur = addDays(cur, 7);
+      }
+
+      for (const entry of entries) {
+        const entryDate = parseLocalDate(entry.date);
+        if (entryDate >= startDate && entryDate <= endDate) {
+          const wStart = startOfWeek(entryDate, { weekStartsOn: 1 });
+          const key = format(wStart, "yyyy-MM-dd");
+          const bucket = weekMap.get(key);
+          if (bucket) {
+            if (entry.weight != null) bucket.weights.push(entry.weight);
+            if (entry.bodyFat != null) bucket.bodyFats.push(entry.bodyFat);
+            if (entry.muscleMass != null) bucket.muscleMasses.push(entry.muscleMass);
+          }
+        }
+      }
+
+      const avg = (arr: number[]) => {
+        if (arr.length === 0) return null;
+        const sum = arr.reduce((a, b) => a + b, 0);
+        return Math.round((sum / arr.length) * 10) / 10;
+      };
+
+      return Array.from(weekMap.values()).map((bucket) => {
+        const dateStr = format(bucket.weekStart, "yyyy-MM-dd");
+        const displayLabel = `${format(bucket.weekStart, "MM/dd")}週`;
+        const weight = avg(bucket.weights);
+        const bodyFat = avg(bucket.bodyFats);
+        const muscleMass = avg(bucket.muscleMasses);
+        const hasData = weight != null || bodyFat != null || muscleMass != null;
+
+        return {
+          date: dateStr,
+          label: displayLabel,
+          weight,
+          bodyFat,
+          muscleMass,
+          hasData,
+        };
+      });
+    }
+
+    // 日別モード
     const days = eachDayOfInterval({ start: startDate, end: endDate });
 
     return days.map((day) => {
@@ -101,113 +179,240 @@ export function TrendChart({ entries }: TrendChartProps) {
       const entry = entryMap.get(dateStr);
       return {
         date: dateStr,
+        label: dateStr,
         weight: entry ? entry.weight : null,
         bodyFat: entry ? entry.bodyFat : null,
         muscleMass: entry ? entry.muscleMass : null,
         hasData: Boolean(entry),
       };
     });
-  }, [entries, period]);
+  }, [entries, period, aggregation]);
 
   const hasValidData = useMemo(() => {
     return chartData.some((d) => d.hasData);
   }, [chartData]);
 
+  // ドットの表示判定：7日間、または週平均かつ週数が少ない場合のみ表示
+  const showDots = period === "7" || (aggregation === "weekly" && chartData.length <= 16);
+
+  const showWeight = metric === "all" || metric === "weight";
+  const showBodyFat = metric === "all" || metric === "bodyFat";
+  const showMuscleMass = metric === "all" || metric === "muscleMass";
+
   return (
     <Card className="w-full shadow-sm mt-8">
-      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2">
-        <CardTitle className="text-xl text-slate-800">推移グラフ</CardTitle>
-        <div className="flex space-x-2 mt-4 sm:mt-0">
-          <Button 
-            variant={period === "7" ? "default" : "outline"} 
-            size="sm" 
-            onClick={() => setPeriod("7")}
-            className={period === "7" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-          >
-            7日間
-          </Button>
-          <Button 
-            variant={period === "30" ? "default" : "outline"} 
-            size="sm" 
-            onClick={() => setPeriod("30")}
-            className={period === "30" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-          >
-            30日間
-          </Button>
-          <Button 
-            variant={period === "all" ? "default" : "outline"} 
-            size="sm" 
-            onClick={() => setPeriod("all")}
-            className={period === "all" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-          >
-            全期間
-          </Button>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <CardTitle className="text-xl text-slate-800">推移グラフ</CardTitle>
+          <div className="flex space-x-2">
+            <Button 
+              variant={period === "7" ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => handlePeriodChange("7")}
+              className={period === "7" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
+            >
+              7日間
+            </Button>
+            <Button 
+              variant={period === "30" ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => handlePeriodChange("30")}
+              className={period === "30" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
+            >
+              30日間
+            </Button>
+            <Button 
+              variant={period === "all" ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => handlePeriodChange("all")}
+              className={period === "all" ? "bg-indigo-600 hover:bg-indigo-700" : ""}
+            >
+              全期間
+            </Button>
+          </div>
+        </div>
+
+        {/* コントロールバー（指標・集計の切り替え） */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+          {/* 指標タブ */}
+          <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-lg overflow-x-auto max-w-full">
+            <button
+              type="button"
+              onClick={() => setMetric("all")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                metric === "all"
+                  ? "bg-white text-slate-800 shadow-xs font-semibold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              すべて
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric("weight")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                metric === "weight"
+                  ? "bg-white text-indigo-600 shadow-xs font-semibold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-indigo-500" />
+              体重
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric("bodyFat")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                metric === "bodyFat"
+                  ? "bg-white text-sky-600 shadow-xs font-semibold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-sky-500" />
+              体脂肪率
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric("muscleMass")}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                metric === "muscleMass"
+                  ? "bg-white text-emerald-600 shadow-xs font-semibold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              骨格筋率
+            </button>
+          </div>
+
+          {/* 集計セレクター（7日間以外で表示） */}
+          {period !== "7" && (
+            <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setAggregation("daily")}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                  aggregation === "daily"
+                    ? "bg-white text-slate-800 shadow-xs font-semibold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                日別
+              </button>
+              <button
+                type="button"
+                onClick={() => setAggregation("weekly")}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                  aggregation === "weekly"
+                    ? "bg-white text-indigo-600 shadow-xs font-semibold"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                週平均
+              </button>
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent>
         {hasValidData ? (
-          <div className="h-[400px] w-full mt-4">
+          <div className="h-[400px] w-full mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <LineChart data={chartData} margin={{ top: 5, right: metric === "all" ? 10 : 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12, fill: '#64748b' }}
-                  tickFormatter={(val) => val.substring(5).replace('-', '/')} // MM/DD
+                  dataKey="label" 
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  tickFormatter={(val) => {
+                    if (typeof val !== "string") return val;
+                    if (val.endsWith("週")) return val;
+                    return val.substring(5).replace('-', '/');
+                  }}
                   axisLine={false}
                   tickLine={false}
                   dy={10}
                   minTickGap={16}
                 />
-                <YAxis 
-                  yAxisId="left"
-                  tick={{ fontSize: 12, fill: '#64748b' }} 
-                  domain={['auto', 'auto']}
-                  axisLine={false}
-                  tickLine={false}
-                  dx={-10}
-                />
-                <YAxis 
-                  yAxisId="right" 
-                  orientation="right" 
-                  tick={{ fontSize: 12, fill: '#64748b' }} 
-                  domain={['auto', 'auto']}
-                  axisLine={false}
-                  tickLine={false}
-                  dx={10}
-                />
+                
+                {metric !== "all" ? (
+                  <YAxis 
+                    yAxisId="single"
+                    tick={{ fontSize: 11, fill: '#64748b' }} 
+                    domain={['auto', 'auto']}
+                    axisLine={false}
+                    tickLine={false}
+                    dx={-5}
+                    unit={metric === "weight" ? "kg" : "%"}
+                  />
+                ) : (
+                  <>
+                    <YAxis 
+                      yAxisId="left"
+                      tick={{ fontSize: 11, fill: '#64748b' }} 
+                      domain={['auto', 'auto']}
+                      axisLine={false}
+                      tickLine={false}
+                      dx={-5}
+                      unit="kg"
+                    />
+                    <YAxis 
+                      yAxisId="right" 
+                      orientation="right" 
+                      tick={{ fontSize: 11, fill: '#64748b' }} 
+                      domain={['auto', 'auto']}
+                      axisLine={false}
+                      tickLine={false}
+                      dx={5}
+                      unit="%"
+                    />
+                  </>
+                )}
+
                 <Tooltip content={<CustomTooltip />} />
-                <Legend layout="vertical" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
-                <Line 
-                  yAxisId="left"
-                  type="monotone" 
-                  dataKey="weight" 
-                  name="体重 (kg)" 
-                  stroke="#6366f1" 
-                  strokeWidth={3}
-                  connectNulls={true}
-                  activeDot={{ r: 6, strokeWidth: 0 }} 
-                />
-                <Line 
-                  yAxisId="right"
-                  type="monotone" 
-                  dataKey="bodyFat" 
-                  name="体脂肪率 (%)" 
-                  stroke="#0ea5e9" 
-                  strokeWidth={2}
-                  connectNulls={true}
-                  activeDot={{ r: 5, strokeWidth: 0 }} 
-                />
-                <Line 
-                  yAxisId="right"
-                  type="monotone" 
-                  dataKey="muscleMass" 
-                  name="骨格筋率 (%)" 
-                  stroke="#10b981" 
-                  strokeWidth={2}
-                  connectNulls={true}
-                  activeDot={{ r: 5, strokeWidth: 0 }} 
-                />
+                
+                {metric === "all" && (
+                  <Legend layout="vertical" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+                )}
+
+                {showWeight && (
+                  <Line 
+                    yAxisId={metric === "weight" ? "single" : "left"}
+                    type="monotone" 
+                    dataKey="weight" 
+                    name="体重 (kg)" 
+                    stroke="#6366f1" 
+                    strokeWidth={metric === "weight" ? 3 : 2.5}
+                    connectNulls={true}
+                    dot={showDots ? { r: 3 } : false}
+                    activeDot={{ r: 6, strokeWidth: 0 }} 
+                  />
+                )}
+                {showBodyFat && (
+                  <Line 
+                    yAxisId={metric === "bodyFat" ? "single" : "right"}
+                    type="monotone" 
+                    dataKey="bodyFat" 
+                    name="体脂肪率 (%)" 
+                    stroke="#0ea5e9" 
+                    strokeWidth={metric === "bodyFat" ? 3 : 2}
+                    connectNulls={true}
+                    dot={showDots ? { r: 3 } : false}
+                    activeDot={{ r: 5, strokeWidth: 0 }} 
+                  />
+                )}
+                {showMuscleMass && (
+                  <Line 
+                    yAxisId={metric === "muscleMass" ? "single" : "right"}
+                    type="monotone" 
+                    dataKey="muscleMass" 
+                    name="骨格筋率 (%)" 
+                    stroke="#10b981" 
+                    strokeWidth={metric === "muscleMass" ? 3 : 2}
+                    connectNulls={true}
+                    dot={showDots ? { r: 3 } : false}
+                    activeDot={{ r: 5, strokeWidth: 0 }} 
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
